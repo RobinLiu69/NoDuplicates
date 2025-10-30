@@ -79,4 +79,4 @@ token = os.getenv("TOKEN")
 intents = discord.Intents.default()
 intents.message_content = True
 client = BotClient(intents=intents)
-client.run(toekn)
+client.run(token)
