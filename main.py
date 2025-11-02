@@ -63,7 +63,7 @@ class BotClient(discord.Client):
                             else old_msg.author.name
                         )
                         await message.reply(
-                            f"搞笑囉 這支影片之找就被 {author_name} 傳過囉！\n"
+                            f"搞笑囉 這支影片之前就被 {author_name} 傳過囉！\n"
                             f"原訊息連結：{jump_url}\n"
                             f"影片：{normalize_youtube_url(old_url)}\n"
                             f"再不讀訊息阿",
