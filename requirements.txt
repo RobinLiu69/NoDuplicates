@@ -1,4 +1,4 @@
 discord.py>=2.3.2
 Flask>=2.3.3
-dotenv>=1.2.1
+dotenv>=0.9.9
 gunicorn>=21.2.0
