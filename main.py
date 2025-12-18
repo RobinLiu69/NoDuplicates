@@ -1,82 +1,88 @@
 import discord, re, os
-from discord.ext import commands
+from dotenv import load_dotenv
 from urllib.parse import urlparse, parse_qs
 
-def extract_youtube_id(url: str) -> str | None:
-    parsed = urlparse(url)
-    domain = parsed.netloc.replace("www.", "").lower()
+load_dotenv()
+TOKEN = os.getenv("TOKEN")
 
-    if "youtube.com" in domain:
-        if parsed.path.startswith("/watch"):
-            query = parse_qs(parsed.query)
-            return query.get("v", [None])[0]
-        elif parsed.path.startswith("/shorts/"):
-            return parsed.path.split("/shorts/")[1].split("/")[0]
-    elif "youtu.be" in domain:
-        return parsed.path.lstrip("/").split("/")[0]
+URL_PATTERN = re.compile(r'https?://\S+')
+
+def extract_media_id(url: str) -> tuple[str, str] | None:
+    """
+    Returns (type, unique_id). Example: ('yt', 'dQw4w9WgXcQ') or ('ig', 'DR6ul_8j71E')
+    """
+    try:
+        parsed = urlparse(url)
+        domain = parsed.netloc.replace("www.", "").lower()
+        path = parsed.path
+
+        if "youtube.com" in domain:
+            if path.startswith("/watch"):
+                return "yt", parse_qs(parsed.query).get("v", [None])[0]
+            if path.startswith(("/shorts/", "/live/")):
+                return "yt", path.split("/")[2]
+        elif "youtu.be" in domain:
+            return "yt", path.lstrip("/")
+
+        if "instagram.com" in domain:
+            if "/reels/" in path or "/reel/" in path:
+                parts = path.split("/")
+                idx = parts.index("reels") if "reels" in parts else parts.index("reel")
+                if len(parts) > idx + 1:
+                    return "ig", parts[idx + 1]
+    except Exception:
+        pass
     return None
-
-def is_same_youtube_video(url1: str, url2: str) -> bool:
-    id1 = extract_youtube_id(url1)
-    id2 = extract_youtube_id(url2)
-    return id1 is not None and id1 == id2
-
-def normalize_youtube_url(url: str) -> str:
-    vid = extract_youtube_id(url)
-    return f"https://youtube.com/watch?v={vid}" if vid else url
-
 
 class BotClient(discord.Client):
     async def on_ready(self):
-        print('Logged on as', self.user)
+        print(f'Logged on as {self.user}')
 
     async def on_message(self, message):
         if message.author == self.user:
             return
 
-        
-        urls = re.findall(r'https?://\S+', message.content)
-        print(urls)
+        urls = URL_PATTERN.findall(message.content)
         if not urls:
             return
-        
-        yt_urls = [u for u in urls if "youtu" in u]
-        if not yt_urls:
-            return
-        
-        for url in yt_urls:
-            normalized = normalize_youtube_url(url)
-            video_id = extract_youtube_id(url)
 
-            if not video_id:
+        for url in urls:
+            media_info = extract_media_id(url)
+            if not media_info:
                 continue
-
+            
+            media_type, media_id = media_info
+            
+            skip = False
             async for old_msg in message.channel.history(limit=1000, before=message):
-                if old_msg.author == self.user:
+                if old_msg.author.bot:
+                    skip = True
                     continue
-                for old_url in re.findall(r'https?://\S+', old_msg.content):
-                    if extract_youtube_id(old_url) == video_id:
-                        jump_url = old_msg.jump_url
-                        author_name = (
-                            old_msg.author.display_name
-                            if hasattr(old_msg.author, "display_name")
-                            else old_msg.author.name
-                        )
+                elif skip == True:
+                    skip = False
+                    continue
+                
+                old_urls = URL_PATTERN.findall(old_msg.content)
+                for old_url in old_urls:
+                    old_info = extract_media_id(old_url)
+                    
+                    if old_info and old_info == (media_type, media_id):
+                        author_name = old_msg.author.display_name
+                        
+                        prefix = "YouTube" if media_type == "yt" else "Instagram Reel"
                         await message.reply(
-                            f"搞笑囉 這支影片之前就被 {author_name} 傳過囉！\n"
-                            f"原訊息連結：{jump_url}\n"
-                            f"影片：{normalize_youtube_url(old_url)}\n"
+                            f"搞笑囉 這支 {prefix} 之前就被 {author_name} 傳過囉！\n"
+                            f"原訊息連結：{old_msg.jump_url}\n"
                             f"再不讀訊息阿",
                             suppress_embeds=True
                         )
                         return
 
-        await self.process_commands(message)
-        
-
-token = os.getenv("TOKEN")
-                
 intents = discord.Intents.default()
 intents.message_content = True
 client = BotClient(intents=intents)
-client.run(token)
+
+if TOKEN:
+    client.run(TOKEN)
+else:
+    print("TOKEN invalid.")
