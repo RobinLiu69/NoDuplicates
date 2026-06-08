@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 
 import discord
@@ -14,6 +15,7 @@ class Detector(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self._backfilled = False
+        self._ready = asyncio.Event()
 
     async def cog_load(self):
         self.prune_loop.start()
@@ -35,9 +37,12 @@ class Detector(commands.Cog):
         if self._backfilled:
             return
         self._backfilled = True
-        for guild in self.bot.guilds:
-            await self._backfill_guild(guild)
-        print("Backfill complete.")
+        try:
+            for guild in self.bot.guilds:
+                await self._backfill_guild(guild)
+            print("Backfill complete.")
+        finally:
+            self._ready.set()
 
     async def _backfill_guild(self, guild):
         cfg = config.load(guild.id)
@@ -75,6 +80,8 @@ class Detector(commands.Cog):
     async def on_message(self, message):
         if message.author.bot or message.guild is None:
             return
+
+        await self._ready.wait()
 
         cfg = config.load(message.guild.id)
         if not cfg.get("enabled", True):

@@ -40,10 +40,15 @@ def record(guild_id, media_type, media_id, channel_id, message_id,
     if created_at is None:
         created_at = int(time.time())
     cur = connect().execute(
-        "INSERT OR IGNORE INTO media "
+        "INSERT INTO media "
         "(guild_id, media_type, media_id, channel_id, message_id, "
         "author_id, author_name, jump_url, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT(guild_id, media_type, media_id) DO UPDATE SET "
+        "channel_id=excluded.channel_id, message_id=excluded.message_id, "
+        "author_id=excluded.author_id, author_name=excluded.author_name, "
+        "jump_url=excluded.jump_url, created_at=excluded.created_at "
+        "WHERE excluded.created_at < media.created_at",
         (guild_id, media_type, media_id, channel_id, message_id,
          author_id, author_name, jump_url, created_at),
     )
